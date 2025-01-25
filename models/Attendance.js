@@ -38,7 +38,6 @@ const attendanceSchema = new mongoose.Schema({
   },
   timeIn: {
     type: Date,
-    required: true
   },
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,

@@ -30,10 +30,7 @@ transporter.verify((error, success) => {
       console.log("Ready for sending emails...");
   }
 })
-
-
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
-
 const sendOTP = asyncHandler(async (req, res) => {
   console.log(req.body);
   const { registerNumber } = req.body;
