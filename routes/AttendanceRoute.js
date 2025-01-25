@@ -1,14 +1,26 @@
-const express = require("express");
-const {
-    getAttendanceByDept,
-    enterAttendanceByDept,
-    getAttendance,
-    deleteAttendanceByDays,
-} =  require("../controllers/AttendanceController.js");
-const { protect, admin } =  require("../middleware/Auth.js");
+const express = require('express');
 const router = express.Router();
-router.route("/:Dept").get(protect, getAttendanceByDept);
-router.route("/").post(protect, admin, enterAttendanceByDept);
-router.route("/:days").delete(protect, admin, deleteAttendanceByDays);
-router.route("/getAnalysis").post(protect, getAttendance);
+const {
+    verifyFace,
+    markAttendance,
+    getAttendanceByDateRange,
+    getTodayAttendance,
+    deleteAttendance,
+    getDepartmentAttendance,
+    getAttendancePercentage,
+    getStudentAttendance
+} = require('../controllers/AttendanceController');
+
+router.route('/verify').post(verifyFace);
+router.route('/mark').post(markAttendance);
+
+router.get('/date-range',  getAttendanceByDateRange);
+router.get('/student/:studentId',  getStudentAttendance);
+router.get('/department/:deptId',   getDepartmentAttendance);
+router.get('/percentage/:studentId',   getAttendancePercentage);
+router.get('/today',   getTodayAttendance);
+
+//router.put('/:id',   updateAttendance);
+router.delete('/:id',   deleteAttendance);
+
 module.exports = router;
