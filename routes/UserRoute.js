@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   authUser,
   registerUser,
-  getUserProfile,
+  getLoggedInUser, // Update the route handler
   updateUserProfile,
   getUsers,
   deleteUser,
@@ -12,14 +12,15 @@ const {
 } = require("../controllers/UserController.js");
 const { protect, admin } = require("../middleware/Auth.js");
 
-router.route("/").post(registerUser).get(protect, admin, getUsers);
+// Public routes
+router.route("/").post(registerUser).get(protect, admin, getUsers); // Admin protected for getting users
 router.post("/login", authUser);
-router
-  .route("/profile")
-  .get(protect, getUserProfile)
-  .put(protect, updateUserProfile);
-router
-  .route("/:id")
+
+// Routes for logged-in user's profile
+router.route("/profile").get(protect, getLoggedInUser).put(protect, updateUserProfile); // Modify to use getLoggedInUser
+
+// Admin routes
+router.route("/:id")
   .delete(protect, admin, deleteUser)
   .get(protect, admin, getUserById)
   .put(protect, admin, updateUser);
