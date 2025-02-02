@@ -331,6 +331,23 @@ const getAttendancePercentage = async (req, res) => {
     }
 };
 
+const getAllAttendance = asyncHandler(async (req, res) => {
+    try {
+        const attendanceRecords = await Attendance.find();
+        console.log(attendanceRecords);
+        res.status(200).json({
+            success: true,
+            data: attendanceRecords
+        });
+    } catch (error) {
+        console.error("Error fetching all attendance:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch attendance data"
+        });
+    }
+});
+
 
 module.exports = {
     verifyFace,
@@ -340,5 +357,6 @@ module.exports = {
     deleteAttendance,
     getDepartmentAttendance,
     getAttendancePercentage,
-    getStudentAttendance
+    getStudentAttendance,
+    getAllAttendance,
 };

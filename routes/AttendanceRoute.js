@@ -8,7 +8,8 @@ const {
     deleteAttendance,
     getDepartmentAttendance,
     getAttendancePercentage,
-    getStudentAttendance
+    getStudentAttendance,
+    getAllAttendance,
 } = require('../controllers/AttendanceController');
 
 router.route('/verify').post(verifyFace);
@@ -22,5 +23,8 @@ router.get('/today',   getTodayAttendance);
 
 //router.put('/:id',   updateAttendance);
 router.delete('/:id',   deleteAttendance);
+//by suganth
+
+router.get("/all", getAllAttendance);
 
 module.exports = router;

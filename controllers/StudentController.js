@@ -12,8 +12,9 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage }).single("image");
 
 
+require("dotenv").config();
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
+  service: 'gmail',
   port: 465,
   secure: true,
   auth: {
@@ -30,6 +31,7 @@ transporter.verify((error, success) => {
       console.log("Ready for sending emails...");
   }
 })
+
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
 const sendOTP = asyncHandler(async (req, res) => {
   console.log(req.body);

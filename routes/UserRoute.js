@@ -3,26 +3,34 @@ const router = express.Router();
 const {
   authUser,
   registerUser,
-  getLoggedInUser, // Update the route handler
+  getLoggedInUser,
   updateUserProfile,
   getUsers,
   deleteUser,
   getUserById,
   updateUser,
+  getAllAttendance,
 } = require("../controllers/UserController.js");
-const { protect, admin } = require("../middleware/Auth.js");
 
 // Public routes
-router.route("/").post(registerUser).get(protect, admin, getUsers); // Admin protected for getting users
 router.post("/login", authUser);
+router.post("/register", registerUser);
+router.get("/profile", getLoggedInUser);
 
-// Routes for logged-in user's profile
-router.route("/profile").get(protect, getLoggedInUser).put(protect, updateUserProfile); // Modify to use getLoggedInUser
+// Routes for updating profiles
+router.put("/profile", updateUserProfile);
 
 // Admin routes
-router.route("/:id")
-  .delete(protect, admin, deleteUser)
-  .get(protect, admin, getUserById)
-  .put(protect, admin, updateUser);
+router.get("/", getUsers);
+router.route("/:id").get(getUserById).put(updateUser).delete(deleteUser);
+
+console.log("test")
+// Attendance routes
+router.get("/allattendance", getAllAttendance); // New route to fetch all attendance
+
+
 
 module.exports = router;
+
+
+

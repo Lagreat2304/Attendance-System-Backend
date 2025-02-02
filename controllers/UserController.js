@@ -1,50 +1,27 @@
 const asyncHandler = require("express-async-handler");
-const generateToken = require("../utils/generateToken.js");
-const User = require("../models/User.js");
-const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const Attendance = require("../models/Attendance");
+const Student = require("../models/Student");
 
-// Middleware to protect routes (ensure the user is authenticated)
-const protect = async (req, res, next) => {
-  let token;
+// ========================== USER AUTH & MANAGEMENT ==========================
 
-  // Check if there is a token in the Authorization header
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
-    try {
-      token = req.headers.authorization.split(" ")[1]; // Get the token from the header
-
-      // Decode the token and get the user ID
-      const decoded = jwt.verify(token, process.env.JWT_SECRET); 
-      
-      // Attach the user object to the request
-      req.user = await User.findById(decoded.id); 
-      next(); // Proceed to the next middleware or route handler
-    } catch (error) {
-      res.status(401).json({ message: "Not authorized, token failed" });
-    }
-  }
-
-  // If there's no token, respond with an unauthorized error
-  if (!token) {
-    res.status(401).json({ message: "Not authorized, no token" });
-  }
-};
-
-// Login user and get token
+// Login user and get user details
 const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
   const user = await User.findOne({ email });
 
   if (user && (await user.matchPassword(password))) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      },
     });
   } else {
-    res.status(401).json({ message: "Invalid email or password" });
+    res.status(401).json({ success: false, message: "Invalid email or password" });
   }
 });
 
@@ -53,102 +30,112 @@ const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
   const userExists = await User.findOne({ email });
-
   if (userExists) {
-    res.status(400).json({ message: "User already exists" });
-    return;
+    return res.status(400).json({ success: false, message: "User already exists" });
   }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-  });
+  const user = await User.create({ name, email, password });
 
   if (user) {
     res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      },
     });
   } else {
-    res.status(400).json({ message: "Invalid user data" });
+    res.status(400).json({ success: false, message: "Invalid user data" });
   }
 });
 
 // Get logged-in user's profile
 const getLoggedInUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id); // Fetch user based on the ID from the token
+  const { id } = req.query;
 
-  if (user) {
-    res.json({
-      username: user.name, // Return the username or any other data you want
-      email: user.email,
-      isAdmin: user.isAdmin,
+  try {
+    const user = await User.findById(id).select("-password");
+    // console.log("first2");
+    if (!user) throw new Error("User not found");
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      },
     });
-  } else {
-    res.status(404).json({ message: "User not found" });
+  } catch (error) {
+    res.status(404).json({ success: false, message: error.message });
   }
 });
 
-// Update user's profile
+// Update user profile
 const updateUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+  const { id, name, email, password, isAdmin } = req.body;
+  const user = await User.findById(id);
 
   if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
+    user.name = name || user.name;
+    user.email = email || user.email;
+    user.isAdmin = isAdmin !== undefined ? isAdmin : user.isAdmin;
 
-    if (req.body.password) {
-      user.password = req.body.password;
+    if (password && password !== "********") {
+      user.password = password;
     }
 
     const updatedUser = await user.save();
 
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      isAdmin: updatedUser.isAdmin,
-      token: generateToken(updatedUser._id),
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        isAdmin: updatedUser.isAdmin,
+      },
     });
   } else {
-    res.status(404).json({ message: "User not found" });
+    res.status(404).json({ success: false, message: "User not found" });
   }
 });
 
-// Admin: Get all users
+// ========================== USER MANAGEMENT ==========================
+
+// Get all users
 const getUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({});
-  res.json(users);
+  const users = await User.find({}).select("-password");
+  res.status(200).json({ success: true, data: users });
 });
 
-// Admin: Delete user
+// Delete a user by ID
 const deleteUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
 
   if (user) {
     await user.remove();
-    res.json({ message: "User removed" });
+    res.status(200).json({ success: true, message: "User removed" });
   } else {
-    res.status(404).json({ message: "User not found" });
+    res.status(404).json({ success: false, message: "User not found" });
   }
 });
 
-// Admin: Get user by ID
+// Get user by ID
 const getUserById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select("-password");
+  const user = await User.findById(req.body.id).select("-password");
 
   if (user) {
-    res.json(user);
+    res.status(200).json({ success: true, data: user });
   } else {
-    res.status(404).json({ message: "User not found" });
+    res.status(404).json({ success: false, message: "User not found" });
   }
 });
 
-// Admin: Update user
+// Update a user by ID
 const updateUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
 
@@ -159,24 +146,48 @@ const updateUser = asyncHandler(async (req, res) => {
 
     const updatedUser = await user.save();
 
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      isAdmin: updatedUser.isAdmin,
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        isAdmin: updatedUser.isAdmin,
+      },
     });
   } else {
-    res.status(404).json({ message: "User not found" });
+    res.status(404).json({ success: false, message: "User not found" });
   }
 });
+
+// ========================== ATTENDANCE MANAGEMENT ==========================
+
+// Fetch attendance records for a specific date
+
+// Fetch all attendance records
+const getAllAttendance = async (req, res) => {
+  console.log("first")
+  // res.json({msg : "ghg"})
+  console.log("attendance test");
+  try {
+    const attendanceRecords = await Attendance.find(); // Fetch all attendance data
+    console.log(attendanceRecords);
+    res.status(200).json({ success: true, data: attendanceRecords });
+  } catch (error) {
+    console.error("Error fetching all attendance:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch attendance data" });
+  }
+};
+
 
 module.exports = {
   authUser,
   registerUser,
-  getLoggedInUser, // Add this function for fetching logged-in user's profile
+  getLoggedInUser,
   updateUserProfile,
   getUsers,
   deleteUser,
   getUserById,
   updateUser,
+  getAllAttendance,
 };
