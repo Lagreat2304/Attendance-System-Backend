@@ -125,13 +125,27 @@ const deleteUser = asyncHandler(async (req, res) => {
 });
 
 // Get user by ID
-const getUserById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.body.id).select("-password");
+// const getUserById = asyncHandler(async (req, res) => {
+//   const user = await User.findById(req.body.id).select("-password");
 
-  if (user) {
-    res.status(200).json({ success: true, data: user });
-  } else {
-    res.status(404).json({ success: false, message: "User not found" });
+//   if (user) {
+//     res.status(200).json({ success: true, data: user });
+//   } else {
+//     res.status(404).json({ success: false, message: "User not found" });
+//   }
+// });
+
+const getUserById = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    // Return only the _id and name fields
+    res.status(200).json({ success: true, data: { id: user._id, name: user.name } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching user" });
   }
 });
 

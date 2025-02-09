@@ -7,6 +7,7 @@ const userRoutes = require('./routes/UserRoute');
 const studentRoutes = require('./routes/StudentRoute');
 const attendanceRoutes = require('./routes/AttendanceRoute');
 const { errorHandler, notFound } = require('./middleware/Error');
+const sendEmailRouter = require('./send-email');
 
 
 app.use(cors());
@@ -24,6 +25,7 @@ app.use(express.urlencoded({limit: '50mb', extended: true}));
 app.use("/users", userRoutes);
 app.use("/student", studentRoutes);
 app.use("/attendance", attendanceRoutes);
+app.use('/api', sendEmailRouter);
 
 app.get("/", async (req, res) => {
   res.send("API is running....");

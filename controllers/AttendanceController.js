@@ -6,6 +6,7 @@ const canvas = require('canvas');
 const { Canvas, Image, ImageData } = canvas;
 const axios = require('axios');
 const mongoose = require('mongoose');
+const User = require('../models/User');
 
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
@@ -331,23 +332,263 @@ const getAttendancePercentage = async (req, res) => {
     }
 };
 
-const getAllAttendance = asyncHandler(async (req, res) => {
-    try {
-        const attendanceRecords = await Attendance.find();
-        console.log(attendanceRecords);
-        res.status(200).json({
-            success: true,
-            data: attendanceRecords
-        });
-    } catch (error) {
-        console.error("Error fetching all attendance:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch attendance data"
-        });
-    }
-});
+//by suganth
 
+const getAttendanceByDate = asyncHandler(async (req, res) => {
+    try {
+      const { date } = req.params;
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+  
+      const attendanceRecords = await Attendance.find({
+        date: { $gte: start, $lte: end },
+      });
+  
+      res.status(200).json({ success: true, data: attendanceRecords });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "Error fetching attendance by date" });
+    }
+  });
+  
+  // Generate missing attendance records for a given date (i.e. for students not in Attendance)
+  const generateAttendance = asyncHandler(async (req, res) => {
+    try {
+      const { date } = req.params;
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+  
+      // Find all attendance records for this date
+      const existingRecords = await Attendance.find({
+        date: { $gte: start, $lte: end },
+      });
+  
+      // Find all students
+      const allStudents = await Student.find({});
+  
+      // Create a set of student IDs that already have a record for this date
+      const presentStudentIds = new Set(
+        existingRecords.map((record) => record.student.toString())
+      );
+  
+      const recordsToInsert = [];
+      allStudents.forEach((student) => {
+        if (!presentStudentIds.has(student._id.toString())) {
+          recordsToInsert.push({
+            student: student._id,
+            name: student.name,
+            registerNo: student.registerNo,
+            date: start, // use the start-of-day date
+            status: "Absent",
+            verificationMethod: "Manual",
+            department: student.department,
+            year: student.year,
+            timeIn: null,
+            verifiedBy: null,
+            remarks: "",
+          });
+        }
+      });
+  
+      if (recordsToInsert.length > 0) {
+        // Insert missing attendance records.
+        await Attendance.insertMany(recordsToInsert);
+      }
+  
+      res.status(200).json({
+        success: true,
+        message: "Missing attendance records generated",
+      });
+    } catch (error) {
+      console.error("Error in generateAttendance:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error generating attendance records",
+      });
+    }
+  });
+  
+  // Get unverified attendance records for a specific date
+  const getUnverifiedAttendanceByDate = asyncHandler(async (req, res) => {
+    try {
+      const { date } = req.params;
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+  
+      const unverified = await Attendance.find({
+        verifiedBy: null,
+        date: { $gte: start, $lte: end },
+      });
+  
+      res.status(200).json({ success: true, data: unverified });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Error fetching unverified attendance",
+      });
+    }
+  });
+  
+  // Approve a single attendance record
+//   const approveAttendance = asyncHandler(async (req, res) => {
+//     try {
+//       const { id } = req.params;
+//       const { verifiedBy } = req.body; // This is the username
+//     console.log(id);
+//       if (!id || !verifiedBy) {
+//         return res.status(400).json({ success: false, message: "Missing required fields" });
+//       }
+  
+//       // Find the user by username
+//       const user = await User.findOne({ name: verifiedBy });
+//       if (!user) {
+//         return res.status(404).json({ success: false, message: "User not found" });
+//       }
+  
+//       // Update the attendance record
+//       const updatedAttendance = await Attendance.findByIdAndUpdate(
+//         id,
+//         { verifiedBy: user._id, status: "Present", timeIn: new Date() },
+//         { new: true }
+//       );
+  
+//       if (!updatedAttendance) {
+//         return res.status(404).json({ success: false, message: "Attendance record not found" });
+//       }
+  
+//       res.status(200).json({ success: true, message: "Attendance approved" });
+//     } catch (error) {
+//       console.error("Error in approveAttendance:", error);
+//       res.status(500).json({ success: false, message: "Error approving attendance" });
+//     }
+//   });
+
+const approveAttendance = asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { verifiedBy } = req.body; // This is the username of the approver
+      if (!id || !verifiedBy) {
+        return res.status(400).json({ success: false, message: "Missing required fields" });
+      }
+      // Find the user by name
+      const user = await User.findOne({ name: verifiedBy });
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+      // Fetch the current attendance record
+      const record = await Attendance.findById(id);
+      if (!record) {
+        return res.status(404).json({ success: false, message: "Attendance record not found" });
+      }
+  
+      // Determine the new status and timeIn:
+      // If the record already indicates absence (or no timeIn), then we verify it as absent.
+      // Otherwise, we mark it as present.
+      let newStatus, newTimeIn;
+      if (record.status === "Absent" || !record.timeIn) {
+        newStatus = "Absent";
+        newTimeIn = null;
+      } else {
+        newStatus = "Present";
+        newTimeIn = new Date();
+      }
+  
+      // Update the attendance record with the current user’s id in verifiedBy
+      const updatedAttendance = await Attendance.findByIdAndUpdate(
+        id,
+        { verifiedBy: user._id, status: newStatus, timeIn: newTimeIn },
+        { new: true }
+      ).populate('verifiedBy', 'name');
+  
+      res.status(200).json({ success: true, message: "Attendance approved", data: updatedAttendance });
+    } catch (error) {
+      console.error("Error in approveAttendance:", error);
+      res.status(500).json({ success: false, message: "Error approving attendance" });
+    }
+  });
+  
+  
+  // Decline attendance
+//   const declineAttendance = asyncHandler(async (req, res) => {
+//     try {
+//       const { id } = req.params;
+//       await Attendance.findByIdAndUpdate(id, { verifiedBy: null, status: "Absent" });
+//       res.status(200).json({ success: true, message: "Attendance declined" });
+//     } catch (error) {
+//       res.status(500).json({ success: false, message: "Error declining attendance" });
+//     }
+//   });
+
+const declineAttendance = asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { verifiedBy } = req.body; // This is the username of the user declining
+      if (!id || !verifiedBy) {
+        return res.status(400).json({ success: false, message: "Missing required fields" });
+      }
+      // Find the user by name
+      const user = await User.findOne({ name: verifiedBy });
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+      // Update the attendance record: mark as "Absent", set timeIn to null and update verifiedBy
+      const updatedAttendance = await Attendance.findByIdAndUpdate(
+        id,
+        { verifiedBy: user._id, status: "Absent", timeIn: null },
+        { new: true }
+      ).populate('verifiedBy', 'name');
+  
+      if (!updatedAttendance) {
+        return res.status(404).json({ success: false, message: "Attendance record not found" });
+      }
+      res.status(200).json({ success: true, message: "Attendance declined", data: updatedAttendance });
+    } catch (error) {
+      console.error("Error in declineAttendance:", error);
+      res.status(500).json({ success: false, message: "Error declining attendance" });
+    }
+  });
+  
+  
+  // Approve all attendance records (bulk update)
+//   const approveAllAttendance = asyncHandler(async (req, res) => {
+//     try {
+//       const { verifiedBy } = req.body;
+//       await Attendance.updateMany(
+//         { verifiedBy: null },
+//         { verifiedBy, status: "Present", timeIn: new Date() }
+//       );
+//       res.status(200).json({ success: true, message: "All attendance approved" });
+//     } catch (error) {
+//       res.status(500).json({ success: false, message: "Error approving all attendance" });
+//     }
+//   });
+
+const approveAllAttendance = asyncHandler(async (req, res) => {
+    try {
+      const { verifiedBy } = req.body;
+      if (!verifiedBy) {
+        return res.status(400).json({ success: false, message: "Missing verifiedBy" });
+      }
+      const user = await User.findOne({ name: verifiedBy });
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+      // Here you might want to update only those records with verifiedBy: null
+      await Attendance.updateMany(
+        { verifiedBy: null },
+        { verifiedBy: user._id, status: "Present", timeIn: new Date() }
+      );
+      res.status(200).json({ success: true, message: "All attendance approved" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "Error approving all attendance" });
+    }
+  });
+  
 
 module.exports = {
     verifyFace,
@@ -358,5 +599,11 @@ module.exports = {
     getDepartmentAttendance,
     getAttendancePercentage,
     getStudentAttendance,
-    getAllAttendance,
+    ////
+    getAttendanceByDate,
+    generateAttendance,
+    getUnverifiedAttendanceByDate,
+    approveAttendance,
+    declineAttendance,
+    approveAllAttendance,
 };
