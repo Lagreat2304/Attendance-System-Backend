@@ -14,7 +14,7 @@ const {
 const { protect, admin } = require("../middleware/Auth.js");
 const upload  = require("../middleware/Upload.js");
 const router = express.Router();
-router.route("/all").get(protect, getAllStudents);
+router.route("/all").get(getAllStudents);
 router.route("/addStudent").post(upload, addStudent);
 router.route("/login").post(getStudent);
 router.route("/sendOTP").post(sendOTP);

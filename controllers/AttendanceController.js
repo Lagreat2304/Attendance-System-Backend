@@ -180,12 +180,12 @@ const getStudentAttendance = asyncHandler(async (req, res) => {
 
         const attendanceRecords = await Attendance.find(query)
             .sort({ date: -1 })
-            .populate('student', 'name registerNo department year');
+            .populate('student', 'name registerNo department year')
+            .populate('verifiedBy', 'name').lean();
 
         if (attendanceRecords.length === 0) {
             return res.status(404).json({ message: "No attendance records found for this student." });
         }
-
         res.status(200).json({
             message: "Attendance records retrieved successfully.",
             studentId,
@@ -217,7 +217,6 @@ const getAttendanceByDateRange = asyncHandler(async (req, res) => {
     const attendance = await Attendance.find(query)
         .populate('student', 'name registerNo')
         .sort({ date: -1 });
-
     res.json(attendance);
 });
 
